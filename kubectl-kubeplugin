@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Usage:
+#   kubectl kubeplugin <resource> -n <namespace>
+#
+# Example:
+#   kubectl kubeplugin pods -n kube-system
+
+# --- Parse arguments ---
+if [[ $# -lt 1 ]]; then
+  echo "Usage: kubectl kubeplugin <resource> [-n namespace]"
+  exit 1
+fi
+
+RESOURCE="$1"
+shift
+
+NAMESPACE="default"
+
+# Parse flags manually (kubectl-style)
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -n|--namespace)
+      NAMESPACE="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1"
+      exit 1
+      ;;
+  esac
+done
+
+# --- Execute kubectl top ---
+OUTPUT=$(kubectl top "$RESOURCE" -n "$NAMESPACE" 2>/dev/null || true)
+
+if [[ -z "$OUTPUT" ]]; then
+  echo "No metrics available for resource '$RESOURCE' in namespace '$NAMESPACE'"
+  exit 1
+fi
+
+# --- Print header ---
+echo "Resource, Namespace, Name, CPU, Memory"
+
+# --- Process rows ---
+echo "$OUTPUT" | tail -n +2 | while read -r line; do
+  NAME=$(echo "$line" | awk '{print $1}')
+  CPU=$(echo "$line" | awk '{print $2}')
+  MEM=$(echo "$line" | awk '{print $3}')
+
+  echo "$RESOURCE, $NAMESPACE, $NAME, $CPU, $MEM"
+done
